@@ -29,35 +29,47 @@ module AnsibleSpec
         next
       end
 
-      # get host
-      host_name = line.split[0]
-      if group.empty? == false
-        if groups.has_key?(line)
-          groups["#{group}"] << line
-          next
-        elsif host_name.include?("[") && host_name.include?("]")
-          # www[01:50].example.com
-          # db-[a:f].example.com
-          hostlist_expression(line,":").each{|h|
-            host = hosts[h.split[0]]
-            groups["#{group}"] << get_inventory_param(h).merge(host)
-          }
-          next
-        else
-          # 1つのみ、かつ:を含まない場合
-          # 192.168.0.1
-          # 192.168.0.1 ansible_ssh_host=127.0.0.1 ...
-          host = hosts[host_name]
-          groups["#{group}"] << get_inventory_param(line).merge(host)
-          next
-        end
+      if group.match /:vars$/
+        # get group variables such as [group:vars]
+        group = group.slice(0, group.length-5)
+        key, value = line.split('=')
+        groups[group].each{|h|
+          if h.has_key?('vars') == false
+            h['vars'] = {}
+          end
+          h['vars'][key] = value
+        }
       else
-        if host_name.include?("[") && host_name.include?("]")
-          hostlist_expression(line, ":").each{|h|
-            hosts[h.split[0]] = get_inventory_param(h)
-          }
+        # get host
+        host_name = line.split[0]
+        if group.empty? == false
+          if groups.has_key?(line)
+            groups["#{group}"] << line
+            next
+          elsif host_name.include?("[") && host_name.include?("]")
+            # www[01:50].example.com
+            # db-[a:f].example.com
+            hostlist_expression(line,":").each{|h|
+              host = hosts[h.split[0]]
+              groups["#{group}"] << get_inventory_param(h).merge(host)
+            }
+            next
+          else
+            # 1つのみ、かつ:を含まない場合
+            # 192.168.0.1
+            # 192.168.0.1 ansible_ssh_host=127.0.0.1 ...
+            host = hosts[host_name]
+            groups["#{group}"] << get_inventory_param(line).merge(host)
+            next
+          end
         else
-          hosts[host_name] = get_inventory_param(line)
+          if host_name.include?("[") && host_name.include?("]")
+            hostlist_expression(line, ":").each{|h|
+              hosts[h.split[0]] = get_inventory_param(h)
+            }
+          else
+            hosts[host_name] = get_inventory_param(line)
+          end
         end
       end
     }
