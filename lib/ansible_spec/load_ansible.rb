@@ -112,14 +112,15 @@ module AnsibleSpec
     end
     dyn_inv.each{|k,v|
       res["#{k.to_s}"] = Array.new unless res.has_key?("#{k.to_s}")
+      vars = v.has_key?('vars') ? v['vars'] : {}
       if v.is_a?(Array)
         # {"webservers":["aaa.com","bbb.com"]}
         v.each {|host|
-          res["#{k.to_s}"] << {"uri"=> host, "port"=> 22}
+          res["#{k.to_s}"] << {"uri"=> host, "port"=> 22, "vars"=> vars}
         }
       elsif v.has_key?("hosts") && v['hosts'].is_a?(Array)
         v['hosts'].each {|host|
-          res["#{k.to_s}"] << {"uri"=> host, "port"=> 22}
+          res["#{k.to_s}"] << {"uri"=> host, "port"=> 22, "vars"=> vars}
         }
       end
     }
@@ -139,6 +140,7 @@ module AnsibleSpec
       return host
     end
     # 192.168.0.1 ansible_ssh_port=22
+    vars={}
     line.split.each{|v|
       unless v.include?("=")
         host['uri'] = v
@@ -148,8 +150,10 @@ module AnsibleSpec
         host['private_key'] = value if key == "ansible_ssh_private_key_file"
         host['user'] = value if key == "ansible_ssh_user"
         host['uri'] = value if key == "ansible_ssh_host"
+        vars[key] = value
       end
     }
+    host['vars'] = vars
     return host
   end
 
@@ -332,6 +336,9 @@ module AnsibleSpec
     if p[group_idx].has_key?('group')
       load_vars_file(vars ,"group_vars/#{p[group_idx]['group']}")
     end
+
+    # inventory host vars
+    vars.merge!(p[group_idx]['hosts'].find{|h| h['uri'] == host}['vars'])
 
     # each host vars
     load_vars_file(vars ,"host_vars/#{host}")
