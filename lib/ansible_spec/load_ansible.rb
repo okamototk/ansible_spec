@@ -16,6 +16,7 @@ module AnsibleSpec
     group = ''
     hosts = Hash.new
     hosts.default = Hash.new
+    var_line = false
     f.each_line{|line|
       line = line.chomp
       # skip
@@ -24,40 +25,57 @@ module AnsibleSpec
 
       # get group
       if line.start_with?('[') && line.end_with?(']')
-        group = line.gsub('[','').gsub(']','')
-        groups["#{group}"] = Array.new
+        if line.end_with?(':vars]')
+          group = line.gsub('[','').gsub(':vars]','')
+          var_line = true
+        else
+          group = line.gsub('[','').gsub(']','')
+          groups["#{group}"] = Array.new
+          var_line = false
+        end
         next
       end
 
-      # get host
-      host_name = line.split[0]
-      if group.empty? == false
-        if groups.has_key?(line)
-          groups["#{group}"] << line
-          next
-        elsif host_name.include?("[") && host_name.include?("]")
-          # www[01:50].example.com
-          # db-[a:f].example.com
-          hostlist_expression(line,":").each{|h|
-            host = hosts[h.split[0]]
-            groups["#{group}"] << get_inventory_param(h).merge(host)
-          }
-          next
-        else
-          # 1つのみ、かつ:を含まない場合
-          # 192.168.0.1
-          # 192.168.0.1 ansible_ssh_host=127.0.0.1 ...
-          host = hosts[host_name]
-          groups["#{group}"] << get_inventory_param(line).merge(host)
-          next
-        end
+      if var_line
+        # get group variables such as [group:vars]
+        key, value = line.split('=')
+        groups[group].each{|h|
+          if h.has_key?('vars') == false
+            h['vars'] = {}
+          end
+          h['vars'][key] = value
+        }
       else
-        if host_name.include?("[") && host_name.include?("]")
-          hostlist_expression(line, ":").each{|h|
-            hosts[h.split[0]] = get_inventory_param(h)
-          }
+        # get host
+        host_name = line.split[0]
+        if group.empty? == false
+          if groups.has_key?(line)
+            groups["#{group}"] << line
+            next
+          elsif host_name.include?("[") && host_name.include?("]")
+            # www[01:50].example.com
+            # db-[a:f].example.com
+            hostlist_expression(line,":").each{|h|
+              host = hosts[h.split[0]]
+              groups["#{group}"] << get_inventory_param(h).merge(host)
+            }
+            next
+          else
+            # 1つのみ、かつ:を含まない場合
+            # 192.168.0.1
+            # 192.168.0.1 ansible_ssh_host=127.0.0.1 ...
+            host = hosts[host_name]
+            groups["#{group}"] << get_inventory_param(line).merge(host)
+            next
+          end
         else
-          hosts[host_name] = get_inventory_param(line)
+          if host_name.include?("[") && host_name.include?("]")
+            hostlist_expression(line, ":").each{|h|
+              hosts[h.split[0]] = get_inventory_param(h)
+            }
+          else
+            hosts[host_name] = get_inventory_param(line)
+          end
         end
       end
     }
@@ -118,8 +136,9 @@ module AnsibleSpec
           res["#{k.to_s}"] << {"uri"=> host, "port"=> 22}
         }
       elsif v.has_key?("hosts") && v['hosts'].is_a?(Array)
+        vars = v.has_key?('vars') ? v['vars'] : {}
         v['hosts'].each {|host|
-          res["#{k.to_s}"] << {"uri"=> host, "port"=> 22}
+          res["#{k.to_s}"] << {"uri"=> host, "port"=> 22, "vars"=> vars}
         }
       end
     }
@@ -139,6 +158,7 @@ module AnsibleSpec
       return host
     end
     # 192.168.0.1 ansible_ssh_port=22
+    vars={}
     line.split.each{|v|
       unless v.include?("=")
         host['uri'] = v
@@ -148,8 +168,10 @@ module AnsibleSpec
         host['private_key'] = value if key == "ansible_ssh_private_key_file"
         host['user'] = value if key == "ansible_ssh_user"
         host['uri'] = value if key == "ansible_ssh_host"
+        vars[key] = value
       end
     }
+    host['vars'] = vars
     return host
   end
 
@@ -332,6 +354,9 @@ module AnsibleSpec
     if p[group_idx].has_key?('group')
       load_vars_file(vars ,"group_vars/#{p[group_idx]['group']}")
     end
+
+    # inventory host vars
+    vars.merge!(p[group_idx]['hosts'].find{|h| h['uri'] == host}['vars'])
 
     # each host vars
     load_vars_file(vars ,"host_vars/#{host}")
