@@ -33,12 +33,16 @@ node ansible_ssh_port=4444 ansible_ssh_host=192.168.1.55
 
 [normal]
 192.168.0.1
-192.168.0.2 ansible_ssh_port=22
+192.168.0.2 ansible_ssh_port=22 
 192.168.0.3:5309
 192.168.0.4 ansible_ssh_private_key_file=~/.ssh/id_rsa
 192.168.0.5 ansible_ssh_user=git
+192.168.0.6 inventory_host_var=host_var
 jumper ansible_ssh_port=5555 ansible_ssh_host=192.168.1.50
 node
+
+[normal:vars]
+inventory_group_var=group var
 EOF
 
   create_file(tmp_ansiblespec,content)
@@ -71,12 +75,14 @@ describe "load_targetsの実行" do
       expect(obj.instance_of?(Hash)).to be_truthy
       expect(obj['uri']).to eq '192.168.0.1'
       expect(obj['port']).to eq 22
+      expect(obj['vars']['inventory_group_var']).to eq 'group var'
     end
     it 'normal 192.168.0.2 ansible_ssh_port=22' do
       obj = @res['normal'][1]
       expect(obj.instance_of?(Hash)).to be_truthy
       expect(obj['uri']).to eq '192.168.0.2'
       expect(obj['port']).to eq 22
+      expect(obj['vars']['inventory_group_var']).to eq 'group var'
     end
     it 'normal 192.168.0.3:5309' do
       obj = @res['normal'][2]
@@ -100,8 +106,16 @@ describe "load_targetsの実行" do
       expect(obj['user']).to eq 'git'
     end
 
-    it 'jumper ansible_ssh_port=5555 ansible_ssh_host=192.168.1.50' do
+    it '192.168.0.6 inventory_host_var=host_var' do
       obj = @res['normal'][5]
+      expect(obj.instance_of?(Hash)).to be_truthy
+      expect(obj['uri']).to eq '192.168.0.6'
+      expect(obj['port']).to eq 22
+      expect(obj['vars']['inventory_host_var']).to eq 'host_var'
+    end
+
+    it 'jumper ansible_ssh_port=5555 ansible_ssh_host=192.168.1.50' do
+      obj = @res['normal'][6]
       expect(obj.instance_of?(Hash)).to be_truthy
       expect(obj['name']).to eq 'jumper ansible_ssh_port=5555 ansible_ssh_host=192.168.1.50'
       expect(obj['uri']).to eq '192.168.1.50'
@@ -109,7 +123,7 @@ describe "load_targetsの実行" do
     end
 
     it 'node ansible_ssh_port=4444 ansible_ssh_host=192.168.1.55' do
-      obj = @res['normal'][6]
+      obj = @res['normal'][7]
       expect(obj.instance_of?(Hash)).to be_truthy
       expect(obj['name']).to eq 'node ansible_ssh_port=4444 ansible_ssh_host=192.168.1.55'
       expect(obj['uri']).to eq '192.168.1.55'
@@ -187,8 +201,16 @@ describe "get_propertiesの実行" do
       expect(obj['user']).to eq 'git'
     end
 
-    it 'jumper ansible_ssh_port=5555 ansible_ssh_host=192.168.1.50' do
+    it '192.168.0.6 inventory_host_var=host_var' do
       obj = @res[0]['hosts'][5]
+      expect(obj.instance_of?(Hash)).to be_truthy
+      expect(obj['uri']).to eq '192.168.0.6'
+      expect(obj['port']).to eq 22
+      expect(obj['vars']['inventory_host_var']).to eq 'host_var'
+    end
+ 
+    it 'jumper ansible_ssh_port=5555 ansible_ssh_host=192.168.1.50' do
+      obj = @res[0]['hosts'][6]
       expect(obj.instance_of?(Hash)).to be_truthy
       expect(obj['name']).to eq 'jumper ansible_ssh_port=5555 ansible_ssh_host=192.168.1.50'
       expect(obj['uri']).to eq '192.168.1.50'
